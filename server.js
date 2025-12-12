@@ -7,7 +7,7 @@ const cloudinary = require("cloudinary").v2;
 const { Readable } = require("stream");
 const path = require("path");
 const jwt = require("jsonwebtoken");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs"); // ✅ 改這裡（重點）
 
 dotenv.config();
 
@@ -15,6 +15,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+/* ===============================
+   Static
+================================ */
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 /* ===============================
@@ -23,7 +26,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
-  .catch((err) => console.error("Mongo error:", err));
+  .catch((err) => console.error("❌ Mongo error:", err));
 
 /* ===============================
    Cloudinary
@@ -35,17 +38,16 @@ cloudinary.config({
 });
 
 /* ===============================
-   Multer
+   Multer (memory)
 ================================ */
-const storage = multer.memoryStorage();
-const upload = multer({ storage });
+const upload = multer({ storage: multer.memoryStorage() });
 
 /* ===============================
-   Admin（暫時寫死，可之後改 DB）
+   Admin（暫時寫死）
 ================================ */
 const ADMIN = {
   username: "admin",
-  passwordHash: bcrypt.hashSync("123456", 10), // 登入密碼
+  passwordHash: bcrypt.hashSync("123456", 10),
 };
 
 /* ===============================
@@ -53,9 +55,7 @@ const ADMIN = {
 ================================ */
 function adminOnly(req, res, next) {
   const auth = req.headers.authorization;
-  if (!auth) {
-    return res.status(401).json({ error: "No token" });
-  }
+  if (!auth) return res.status(401).json({ error: "No token" });
 
   const token = auth.split(" ")[1];
   try {
@@ -68,7 +68,7 @@ function adminOnly(req, res, next) {
 }
 
 /* ===============================
-   Admin Login API
+   Admin Login
 ================================ */
 app.post("/api/admin/login", (req, res) => {
   const { username, password } = req.body;
@@ -129,15 +129,13 @@ function uploadBufferToCloudinary(buffer) {
     readable.push(buffer);
     readable.push(null);
 
-    const stream = cloudinary.uploader.upload_stream(
+    cloudinary.uploader.upload_stream(
       { folder: "secondhand-app" },
       (err, result) => {
         if (err) return reject(err);
         resolve(result.secure_url);
       }
-    );
-
-    readable.pipe(stream);
+    ).end(buffer);
   });
 }
 
@@ -157,8 +155,10 @@ app.get("/api/items", async (req, res) => {
         { model: new RegExp(q, "i") },
       ];
     }
+
     if (city) filter.city = city;
     if (status) filter.status = status;
+
     if (minPrice || maxPrice) {
       filter.price = {};
       if (minPrice) filter.price.$gte = Number(minPrice);
@@ -185,7 +185,7 @@ app.get("/api/items/:id", async (req, res) => {
 });
 
 /* ===============================
-   Admin APIs（JWT 保護）
+   Admin APIs
 ================================ */
 app.post(
   "/api/items",
@@ -196,16 +196,14 @@ app.post(
       const { tags, price, quantity } = req.body;
 
       const images = [];
-      if (req.files) {
-        for (const file of req.files) {
-          const url = await uploadBufferToCloudinary(file.buffer);
-          images.push(url);
-        }
+      for (const file of req.files || []) {
+        const url = await uploadBufferToCloudinary(file.buffer);
+        images.push(url);
       }
 
       const parsedTags =
         typeof tags === "string"
-          ? tags.split(",").map((t) => t.trim()).filter(Boolean)
+          ? tags.split(",").map(t => t.trim()).filter(Boolean)
           : [];
 
       const item = await Item.create({
@@ -217,16 +215,14 @@ app.post(
       });
 
       res.json(item);
-    } catch {
+    } catch (err) {
       res.status(500).json({ error: "Server error" });
     }
   }
 );
 
 app.put("/api/items/:id", adminOnly, async (req, res) => {
-  const item = await Item.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
-  });
+  const item = await Item.findByIdAndUpdate(req.params.id, req.body, { new: true });
   if (!item) return res.status(404).json({ error: "Not found" });
   res.json(item);
 });
@@ -241,5 +237,5 @@ app.delete("/api/items/:id", adminOnly, async (req, res) => {
 ================================ */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ secondhand-backend-cloud running on port ${PORT}`);
+  console.log(`✅ secondhand-backend running on port ${PORT}`);
 });
