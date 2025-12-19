@@ -16,15 +16,9 @@ app.use(cors());
 app.use(express.json());
 
 /* ===============================
-   Debug ENV (超重要)
+   Static
 ================================ */
-console.log("ENV CHECK:", {
-  CLOUD_NAME: !!process.env.CLOUD_NAME,
-  CLOUD_KEY: !!process.env.CLOUD_KEY,
-  CLOUD_SECRET: !!process.env.CLOUD_SECRET,
-  JWT_SECRET: !!process.env.JWT_SECRET,
-  MONGO_URI: !!process.env.MONGO_URI,
-});
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 /* ===============================
    MongoDB
@@ -44,12 +38,12 @@ cloudinary.config({
 });
 
 /* ===============================
-   Multer
+   Multer (memory)
 ================================ */
 const upload = multer({ storage: multer.memoryStorage() });
 
 /* ===============================
-   Admin
+   Admin（寫死帳號）
 ================================ */
 const ADMIN = {
   username: "admin",
@@ -61,15 +55,18 @@ const ADMIN = {
 ================================ */
 function adminOnly(req, res, next) {
   const auth = req.headers.authorization;
-  if (!auth) return res.status(401).json({ error: "No token" });
+  if (!auth) {
+    console.log("❌ No Authorization header");
+    return res.status(401).json({ error: "No token" });
+  }
 
+  const token = auth.split(" ")[1];
   try {
-    const token = auth.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (decoded.role !== "admin") throw new Error();
+    if (decoded.role !== "admin") throw new Error("Not admin");
     next();
   } catch (err) {
-    console.error("JWT ERROR:", err);
+    console.log("❌ JWT error:", err.message);
     res.status(401).json({ error: "Invalid token" });
   }
 }
@@ -105,6 +102,7 @@ const itemSchema = new mongoose.Schema(
     price: Number,
     description: String,
     images: [String],
+    status: { type: String, default: "on" },
   },
   { timestamps: true }
 );
@@ -112,25 +110,27 @@ const itemSchema = new mongoose.Schema(
 const Item = mongoose.model("Item", itemSchema);
 
 /* ===============================
-   Cloudinary Upload Helper
+   Cloudinary Upload Helper（防爆）
 ================================ */
 function uploadBufferToCloudinary(buffer) {
   return new Promise((resolve, reject) => {
-    cloudinary.uploader.upload_stream(
+    const stream = cloudinary.uploader.upload_stream(
       { folder: "secondhand-app" },
       (err, result) => {
         if (err) {
-          console.error("❌ Cloudinary error:", err);
-          return reject(err);
+          console.log("❌ Cloudinary error:", err);
+          reject(err);
+        } else {
+          resolve(result.secure_url);
         }
-        resolve(result.secure_url);
       }
-    ).end(buffer);
+    );
+    stream.end(buffer);
   });
 }
 
 /* ===============================
-   ADD ITEM (防爆版)
+   新增商品（含圖片）
 ================================ */
 app.post(
   "/api/items",
@@ -138,32 +138,33 @@ app.post(
   upload.array("images", 6),
   async (req, res) => {
     try {
-      console.log("=== ADD ITEM START ===");
-      console.log("BODY:", req.body);
-      console.log("FILES:", req.files?.length);
+      console.log("📦 Body:", req.body);
+      console.log("🖼 Files:", req.files?.length || 0);
+
+      const { name, price, description } = req.body;
+
+      if (!name || !price) {
+        return res.status(400).json({ error: "name / price required" });
+      }
 
       const images = [];
-
       for (const file of req.files || []) {
-        console.log("Uploading image, size:", file.buffer.length);
         const url = await uploadBufferToCloudinary(file.buffer);
         images.push(url);
       }
 
       const item = await Item.create({
-        name: req.body.name,
-        price: Number(req.body.price),
-        description: req.body.description,
+        name,
+        price: Number(price),
+        description,
         images,
       });
 
-      console.log("✅ ITEM CREATED:", item._id);
+      console.log("✅ Item created:", item._id);
       res.json(item);
     } catch (err) {
-      console.error("🔥 ADD ITEM FAILED:", err);
-      res.status(500).json({
-        error: err.message || err.toString(),
-      });
+      console.log("❌ Add item error:", err);
+      res.status(500).json({ error: "Server error" });
     }
   }
 );
