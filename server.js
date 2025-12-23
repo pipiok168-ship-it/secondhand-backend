@@ -1,22 +1,21 @@
-// server.js
 const express = require("express");
 const cors = require("cors");
 
 const app = express();
 
-// ===== 基本中介層 =====
+// ===== 中介層 =====
 app.use(cors());
 app.use(express.json());
 
-// ===== 假資料（先不用 DB，避免亂）=====
+// ===== 暫存商品資料（不接 DB）=====
 let products = [];
 
-// ===== Health Check =====
+// ===== 健康檢查 =====
 app.get("/", (req, res) => {
   res.send("Secondhand backend running");
 });
 
-// ===== 新增商品（Android 會打這支）=====
+// ===== 新增商品 =====
 app.post("/api/products", (req, res) => {
   const { name, price, description } = req.body;
 
@@ -37,12 +36,10 @@ app.post("/api/products", (req, res) => {
 
   products.push(product);
 
-  console.log("New product:", product);
-
   res.status(201).json(product);
 });
 
-// ===== 取得商品列表（之後 RecyclerView 用）=====
+// ===== 取得商品列表 =====
 app.get("/api/products", (req, res) => {
   res.json(products);
 });
@@ -52,3 +49,4 @@ const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log("Backend running on port", PORT);
 });
+
