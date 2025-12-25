@@ -8,7 +8,7 @@ app.use(cors());
 app.use(express.json());
 
 // =======================
-// 1️⃣ Mongo 連線
+//  Mongo 連線
 // =======================
 const mongoUri =
   process.env.MONGO_URI ||
@@ -24,7 +24,7 @@ mongoose
 
 
 // =======================
-// 2️⃣ 商品資料模型
+//  商品資料模型
 // =======================
 const ProductSchema = new mongoose.Schema(
   {
@@ -39,20 +39,13 @@ const Product = mongoose.model("products", ProductSchema);
 
 
 // =======================
-// 3️⃣ Multer（暫存記憶體）
+//  Multer（暫存記憶體）
 // =======================
 const upload = multer({ storage: multer.memoryStorage() });
 
 
 // =======================
-// 4️⃣ Cloudinary Upload 路由（外層掛載）
-// =======================
-const uploadRoute = require("./routes/upload");
-app.use("/api/upload", uploadRoute);
-
-
-// =======================
-// 5️⃣ 取得商品列表（給 Android）
+//  商品列表
 // =======================
 app.get("/api/products", async (req, res) => {
   const products = await Product.find().sort({ _id: -1 });
@@ -61,10 +54,11 @@ app.get("/api/products", async (req, res) => {
 
 
 // =======================
-// 6️⃣ 新增商品（先不處理圖片）
+//  新增商品（先用 placeholder）
 // =======================
 app.post("/api/products", upload.single("image"), async (req, res) => {
   try {
+
     const { name, price } = req.body;
 
     if (!name || !price) {
@@ -74,7 +68,7 @@ app.post("/api/products", upload.single("image"), async (req, res) => {
     const product = await Product.create({
       name,
       price: Number(price),
-      imageUrl: "https://via.placeholder.com/300",
+      imageUrl: "https://via.placeholder.com/300"
     });
 
     res.json(product);
@@ -87,7 +81,7 @@ app.post("/api/products", upload.single("image"), async (req, res) => {
 
 
 // =======================
-// 7️⃣ 健康檢查
+//  健康檢查
 // =======================
 app.get("/", (req, res) => {
   res.send("Secondhand backend running");
@@ -95,7 +89,7 @@ app.get("/", (req, res) => {
 
 
 // =======================
-// 8️⃣ 啟動服務
+//  啟動服務
 // =======================
 const PORT = process.env.PORT || 8080;
 
