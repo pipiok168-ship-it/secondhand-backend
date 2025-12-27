@@ -1,14 +1,16 @@
 {
-  "name": "secondhand-backend",
+  "name": "secondhand-backend-v2",
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
+    "express": "^4.19.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^5.2.1",
-    "mongoose": "^8.7.0"
+    "mongoose": "^7.6.3",
+    "multer": "^1.4.5-lts.1",
+    "dotenv": "^16.4.5"
   }
 }
+
