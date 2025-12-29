@@ -1,37 +1,79 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
+const { Readable } = require("stream");
+const cloudinary = require("cloudinary").v2;
+const Product = require("../models/Product"); // 如果你目前放在別處告訴我
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-let products = []; // 暫存用（之後可接 DB）
 
-router.post("/", upload.single("image"), (req, res) => {
+// ==========================
+// 取得商品列表
+// ==========================
+router.get("/", async (req, res) => {
+  const list = await Product.find().sort({ _id: -1 });
+  res.json(list);
+});
+
+
+// ==========================
+// 新增商品（含圖片上傳）
+// ==========================
+router.post("/", upload.single("image"), async (req, res) => {
   try {
-    const { name, price } = req.body;
+    let imageUrl = "";
 
-    if (!name || !price || !req.file) {
-      return res.status(400).json({ message: "資料不完整" });
+    if (req.file) {
+      const bufferStream = new Readable();
+      bufferStream.push(req.file.buffer);
+      bufferStream.push(null);
+
+      const uploadRes = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          { folder: "secondhand_products" },
+          (err, result) => (err ? reject(err) : resolve(result))
+        ).end(req.file.buffer);
+      });
+
+      imageUrl = uploadRes.secure_url;
     }
 
-    const product = {
-      id: Date.now().toString(),
-      name,
-      price: Number(price),
-      imageUrl: `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`
-    };
+    const product = await Product.create({
+      name: req.body.name,
+      price: req.body.price,
+      imageUrl,
+      description: req.body.description || ""
+    });
 
-    products.push(product);
+    res.json(product);
 
-    res.json({ ok: true, product });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.log("POST ERR =>", err);
+    res.status(500).json({ message: "Create failed" });
   }
 });
 
-router.get("/", (req, res) => {
-  res.json(products);
+
+// ==========================
+// 刪除商品
+// ==========================
+router.delete("/:id", async (req, res) => {
+  try {
+    const deleted = await Product.findByIdAndDelete(req.params.id);
+
+    if (!deleted)
+      return res.status(404).json({ message: "Not found" });
+
+    res.json({
+      message: "Deleted",
+      id: deleted._id
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: "Delete failed" });
+  }
 });
+
 
 module.exports = router;
