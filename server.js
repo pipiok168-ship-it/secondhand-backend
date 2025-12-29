@@ -14,7 +14,7 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 app.use(cors());
-app.use(express.json()); // 只會處理 JSON（圖片用 multer）
+app.use(express.json()); // 只處理 JSON（圖片靠 multer）
 
 
 // ===========================================
@@ -41,6 +41,7 @@ const ProductSchema = new mongoose.Schema(
     name: String,
     price: Number,
     imageUrl: String,
+    description: String
   },
   { timestamps: true }
 );
@@ -65,21 +66,25 @@ console.log("📌 Cloudinary 設定檢查：", {
 
 
 // ===========================================
-// 5. Multer（記憶體模式，接收圖片 Buffer）
+// 5. Multer（圖片用記憶體 Buffer）
 // ===========================================
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 
 // ===========================================
-// 6. API：取得商品列表（確認 DB 有沒有東西）
+// 6. 取得商品列表
 // ===========================================
 app.get("/api/products", async (req, res) => {
   try {
     console.log("🟢 GET /api/products 收到請求");
+
     const products = await Product.find().sort({ _id: -1 });
+
     console.log("🟢 目前商品數量 =", products.length);
+
     res.json(products);
+
   } catch (err) {
     console.log("❌ 讀取商品列表錯誤 =", err);
     res.status(500).json({ message: "Failed to fetch products" });
@@ -88,19 +93,18 @@ app.get("/api/products", async (req, res) => {
 
 
 // ===========================================
-// 7. API：新增商品＋圖片（自動寫入 imageUrl）
+// 7. 新增商品（含圖片上傳）
 // ===========================================
 app.post("/api/products", upload.single("image"), async (req, res) => {
   try {
     console.log("===== 🟡 新商品請求進來 =====");
     console.log("📦 req.body =", req.body);
-    console.log("🖼 req.file =", req.file ? req.file.originalname : "沒有收到圖片");
+    console.log("🖼 req.file =", req.file ? req.file.originalname : "沒有圖片");
 
     let imageUrl = "";
 
-    // 有圖片才上傳 Cloudinary
     if (req.file) {
-      console.log("🚀 開始上傳到 Cloudinary...");
+      console.log("🚀 開始上傳 Cloudinary");
 
       const bufferStream = new Readable();
       bufferStream.push(req.file.buffer);
@@ -114,41 +118,68 @@ app.post("/api/products", upload.single("image"), async (req, res) => {
               console.log("❌ Cloudinary 錯誤 =", err);
               reject(err);
             } else {
-              console.log("✅ Cloudinary 回傳 URL =", result.secure_url);
+              console.log("✅ Cloudinary URL =", result.secure_url);
               resolve(result);
             }
           }
         );
-
         bufferStream.pipe(stream);
       });
 
       imageUrl = uploadResult.secure_url;
-    } else {
-      console.log("⚠ 沒有圖片要上傳，imageUrl 將會是空字串");
     }
 
-    const productData = {
+    const product = await Product.create({
       name: req.body.name,
       price: req.body.price,
+      description: req.body.description || "",
       imageUrl,
-    };
+    });
 
-    console.log("📝 準備寫入資料庫 =", productData);
+    console.log("🎯 寫入完成 _id =", product._id);
 
-    const product = await Product.create(productData);
-
-    console.log("🎯 寫入完成，_id =", product._id);
     res.json(product);
+
   } catch (err) {
-    console.log("🔥 /api/products API 爆錯 =", err);
-    res.status(500).json({ message: "Upload failed", error: err });
+    console.log("🔥 /api/products 發生錯誤 =", err);
+    res.status(500).json({ message: "Upload failed" });
   }
 });
 
 
 // ===========================================
-// 8. 啟動 Server
+// 8. 刪除商品（Android 用）
+// 路徑：DELETE /api/products/:id
+// ===========================================
+app.delete("/api/products/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    console.log("🟥 收到刪除請求 =>", id);
+
+    const deleted = await Product.findByIdAndDelete(id);
+
+    if (!deleted) {
+      console.log("⚠ 找不到商品，無法刪除");
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    console.log("🟢 已刪除 =>", deleted._id);
+
+    res.json({
+      message: "Deleted",
+      id: deleted._id
+    });
+
+  } catch (err) {
+    console.log("🔥 DELETE API 發生錯誤 =", err);
+    res.status(500).json({ message: "Delete failed" });
+  }
+});
+
+
+// ===========================================
+// 9. 啟動服務
 // ===========================================
 app.listen(PORT, () => {
   console.log(`🚀 Backend running on port ${PORT}`);
