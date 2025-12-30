@@ -3,40 +3,36 @@ const router = express.Router();
 const multer = require("multer");
 const { Readable } = require("stream");
 const cloudinary = require("cloudinary").v2;
-const Product = require("../models/Product"); // 如果你目前放在別處告訴我
+const Product = require("../models/Product");
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-
-// ==========================
 // 取得商品列表
-// ==========================
 router.get("/", async (req, res) => {
   const list = await Product.find().sort({ _id: -1 });
   res.json(list);
 });
 
-
-// ==========================
 // 新增商品（含圖片上傳）
-// ==========================
 router.post("/", upload.single("image"), async (req, res) => {
   try {
     let imageUrl = "";
 
+    // 有圖片才上傳
     if (req.file) {
       const bufferStream = new Readable();
       bufferStream.push(req.file.buffer);
       bufferStream.push(null);
 
-      const uploadRes = await new Promise((resolve, reject) => {
-        cloudinary.uploader.upload_stream(
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
           { folder: "secondhand_products" },
           (err, result) => (err ? reject(err) : resolve(result))
-        ).end(req.file.buffer);
+        );
+        bufferStream.pipe(stream);
       });
 
-      imageUrl = uploadRes.secure_url;
+      imageUrl = result.secure_url;
     }
 
     const product = await Product.create({
@@ -46,34 +42,14 @@ router.post("/", upload.single("image"), async (req, res) => {
       description: req.body.description || ""
     });
 
+    console.log("🟢 已寫入 Mongo =", product._id);
+
     res.json(product);
 
   } catch (err) {
-    console.log("POST ERR =>", err);
+    console.log("❌ 新增商品失敗 =", err);
     res.status(500).json({ message: "Create failed" });
   }
 });
-
-
-// ==========================
-// 刪除商品
-// ==========================
-router.delete("/:id", async (req, res) => {
-  try {
-    const deleted = await Product.findByIdAndDelete(req.params.id);
-
-    if (!deleted)
-      return res.status(404).json({ message: "Not found" });
-
-    res.json({
-      message: "Deleted",
-      id: deleted._id
-    });
-
-  } catch (err) {
-    res.status(500).json({ message: "Delete failed" });
-  }
-});
-
 
 module.exports = router;
