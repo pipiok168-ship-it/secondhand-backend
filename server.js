@@ -1,6 +1,6 @@
 // server.js
 // ===========================================
-// 完整、乾淨版（Multer 多圖 images）
+// 根目錄最終穩定版（Multer 多圖 + DELETE OK）
 // ===========================================
 
 const express = require("express");
@@ -10,6 +10,8 @@ const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
 const { Readable } = require("stream");
 require("dotenv").config();
+
+console.log("🔥 ROOT server.js is running 🔥");
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -53,7 +55,7 @@ cloudinary.config({
 });
 
 // =======================
-// Multer（⭐ 重點：多圖 images）
+// Multer（多圖 images）
 // =======================
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -73,16 +75,13 @@ app.get("/api/products", async (req, res) => {
 });
 
 // =======================
-// POST 新增商品（✅ 多圖）
+// POST 新增商品（多圖）
 // =======================
 app.post(
   "/api/products",
-  upload.array("images", 10), // ⭐ 關鍵：欄位名 images
+  upload.array("images", 10),
   async (req, res) => {
     try {
-      console.log("📦 body =", req.body);
-      console.log("🖼 files =", req.files?.length || 0);
-
       const { name, price, description } = req.body;
 
       if (!name || !price) {
@@ -121,6 +120,27 @@ app.post(
     }
   }
 );
+
+// =======================
+// DELETE 刪除商品（⭐ 關鍵）
+// =======================
+app.delete("/api/products/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log("🗑 DELETE product id =", id);
+
+    const deleted = await Product.findByIdAndDelete(id);
+
+    if (!deleted) {
+      return res.status(404).json({ message: "商品不存在" });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("🔥 delete error", err);
+    res.status(500).json({ message: "delete failed" });
+  }
+});
 
 // =======================
 // Server start
