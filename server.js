@@ -1,6 +1,7 @@
 // server.js
 // ===========================================
-// 最終穩定版（GET / POST / DELETE）
+// Secondhand Backend - Stable v1.0
+// GET / POST (multi images) / DELETE
 // ===========================================
 
 const express = require("express");
@@ -33,10 +34,10 @@ mongoose
 // =======================
 const ProductSchema = new mongoose.Schema(
   {
-    name: String,
-    price: Number,
-    description: String,
-    imageUrls: [String],
+    name: { type: String, required: true },
+    price: { type: Number, required: true },
+    description: { type: String, default: "" },
+    imageUrls: { type: [String], default: [] },
   },
   { timestamps: true }
 );
@@ -77,9 +78,12 @@ app.get("/api/products", async (req, res) => {
 // =======================
 app.post(
   "/api/products",
-  upload.array("images", 10),
+  upload.array("images", 10), // ⭐ 欄位名一定是 images
   async (req, res) => {
     try {
+      console.log("📦 body =", req.body);
+      console.log("🖼 files =", req.files?.length || 0);
+
       const { name, price, description } = req.body;
 
       if (!name || !price) {
@@ -120,7 +124,7 @@ app.post(
 );
 
 // =======================
-// DELETE 刪除商品（⭐ 關鍵）
+// DELETE 刪除商品（⭐ 你之前缺的）
 // =======================
 app.delete("/api/products/:id", async (req, res) => {
   try {
